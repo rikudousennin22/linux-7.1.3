@@ -1,0 +1,9 @@
+*.o
+*.ko
+*.so
+.git/
+Build/
+*.swp
+*.swo
+*~
+.DS_Store

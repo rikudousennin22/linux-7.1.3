@@ -1,0 +1,484 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-2-Clause)
+/*
+ * Realtek RTD16xx SoC family
+ *
+ * Copyright (c) 2019 Realtek Semiconductor Corp.
+ * Copyright (c) 2019 Andreas Färber
+ */
+
+#include <dt-bindings/interrupt-controller/arm-gic.h>
+#include <dt-bindings/interrupt-controller/irq.h>
+#include <dt-bindings/gpio/gpio.h>
+
+/ {
+	interrupt-parent = <&gic>;
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		smp_spin_table: spin-table@f000000 {
+			reg = <0x0f000000 0x1000>;
+			no-map;
+		};
+
+		uboot_load: uboot@5000000 {
+			reg = <0x05000000 0x01000000>;
+			no-map;
+		};
+
+		uboot_reloc: uboot@7e000000 {
+			reg = <0x7e000000 0x02000000>;
+		};
+
+
+		rpc_comm: rpc@2f000 {
+			reg = <0x2f000 0x1000>;
+		};
+
+		rpc_ringbuf: rpc@1ffe000 {
+			reg = <0x1ffe000 0x4000>;
+		};
+
+		/*
+		 * TZC-400 firmware-protected region.
+		 * BL31/OPTEE protects 0x0f900000-0x13bff000 at hardware level.
+		 * Writes are silently dropped, reads return 0x00.
+		 * Extend from 0x0f001000 (after spin-table) to 0x13ffffff
+		 * to cover the full protected zone with safety margin.
+		 * Confirmed by memcheck physical page scan.
+		 */
+		tee: tee@f001000 {
+			reg = <0x0f001000 0x04fff000>; /* ~80MB: 0x0f001000-0x13ffffff */
+			no-map;
+		};
+	};
+
+	reg_cpu: regulator-cpu {
+		compatible = "regulator-fixed";
+		regulator-name = "cpu_power";
+		regulator-min-microvolt = <1200000>;
+		regulator-max-microvolt = <1200000>;
+		regulator-always-on;
+		regulator-boot-on;
+	};
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu0: cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a55";
+			reg = <0x0>;
+			enable-method = "psci";
+			next-level-cache = <&l2>;
+			cpu-supply = <&reg_cpu>;
+		};
+
+		cpu1: cpu@100 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a55";
+			reg = <0x100>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x00 0x0f000008>;
+			next-level-cache = <&l3>;
+			cpu-supply = <&reg_cpu>;
+		};
+
+		cpu2: cpu@200 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a55";
+			reg = <0x200>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x00 0x0f000010>;
+			next-level-cache = <&l3>;
+			cpu-supply = <&reg_cpu>;
+		};
+
+		cpu3: cpu@300 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a55";
+			reg = <0x300>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x00 0x0f000018>;
+			next-level-cache = <&l3>;
+			cpu-supply = <&reg_cpu>;
+		};
+
+		cpu4: cpu@400 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a55";
+			reg = <0x400>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x00 0x0f000020>;
+			next-level-cache = <&l3>;
+			cpu-supply = <&reg_cpu>;
+		};
+
+		cpu5: cpu@500 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a55";
+			reg = <0x500>;
+			enable-method = "spin-table";
+			cpu-release-addr = <0x00 0x0f000028>;
+			next-level-cache = <&l3>;
+			cpu-supply = <&reg_cpu>;
+		};
+
+		l2: l2-cache {
+			compatible = "cache";
+			next-level-cache = <&l3>;
+			cache-level = <2>;
+			cache-unified;
+
+		};
+
+		l3: l3-cache {
+			compatible = "cache";
+			cache-level = <3>;
+			cache-unified;
+		};
+	};
+
+	timer {
+		compatible = "arm,armv8-timer";
+		interrupts = <GIC_PPI 13 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 14 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 11 IRQ_TYPE_LEVEL_LOW>,
+			     <GIC_PPI 10 IRQ_TYPE_LEVEL_LOW>;
+	};
+
+	arm_pmu: pmu {
+		compatible = "arm,cortex-a55-pmu";
+		interrupts = <GIC_PPI 7 IRQ_TYPE_LEVEL_LOW>;
+		interrupt-affinity = <&cpu0>, <&cpu1>, <&cpu2>,
+			<&cpu3>, <&cpu4>, <&cpu5>;
+	};
+
+	psci {
+		compatible = "arm,psci-1.0";
+		method = "smc";
+	};
+
+	osc27M: osc {
+		compatible = "fixed-clock";
+		clock-frequency = <27000000>;
+		clock-output-names = "osc27M";
+		#clock-cells = <0>;
+	};
+
+	soc@0 {
+		compatible = "simple-bus";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges = <0x00000000 0x00000000 0x0002e000>, /* boot ROM */
+			 <0x98000000 0x98000000 0x68000000>;
+		leds {
+			compatible = "gpio-leds";
+
+			led_sys_red {
+				label = "red:sys";
+				gpios = <&rtk_iso_gpio 23 0>;
+				default-state = "off";
+			};
+
+			led_sys_green {
+				label = "green:sys";
+				gpios = <&rtk_iso_gpio 58 0>;
+				default-state = "off";
+			};
+
+			led_net_red {
+				label = "red:net";
+				gpios = <&rtk_iso_gpio 64 0>;
+				default-state = "off";
+			};
+
+			led_net_green {
+				label = "green:net";
+				gpios = <&rtk_iso_gpio 57 0>;
+				default-state = "off";
+			};
+		};
+
+		rbus: bus@98000000 {
+			compatible = "simple-bus";
+			reg = <0x98000000 0x200000>;
+			#address-cells = <1>;
+			#size-cells = <1>;
+			ranges = <0x0 0x98000000 0x200000>;
+
+			crt: syscon@0 {
+				compatible = "syscon", "simple-mfd";
+				reg = <0x0 0x1000>;
+				reg-io-width = <4>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0x0 0x0 0x1000>;
+			};
+
+			iso: syscon@7000 {
+				compatible = "syscon", "simple-mfd";
+				reg = <0x7000 0x1000>;
+				reg-io-width = <4>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0x0 0x7000 0x1000>;
+
+				rtk_iso_gpio: gpio@100 {
+					compatible = "realtek,rtd1619-iso-gpio";
+					gpio-controller;
+					#gpio-cells = <2>;
+					reg = <0x100 0x100>, 
+						<0x0 0x100>;					
+					interrupt-controller;
+					interrupt-parent = <&mux_intc>;
+					#interrupt-cells = <2>;
+					interrupts = <51 4>, <52 4>;
+					
+					status = "okay";
+				};
+			};
+
+			sb2: syscon@1a000 {
+				compatible = "syscon", "simple-mfd";
+				reg = <0x1a000 0x1000>;
+				reg-io-width = <4>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0x0 0x1a000 0x1000>;
+			};
+
+			pinctrl: pinctrl@4e000 {
+				compatible = "realtek,rtk16xx-pinctrl";
+				reg = <0x4e000 0x100>,
+					<0x4f000 0x100>;
+				#gpio-range-cells = <3>;
+				status = "okay";
+
+				sdcard_pins_data: sdcard_data {
+					realtek,pins = "sd3_data_3", "sd3_data_2", "sd3_data_1", "sd3_data_0", "sd3_clk", "sd3_cmd";
+					realtek,function = "sd";
+					realtek,pull_en = <1>;
+					realtek,pull_sel = <1>;
+				};
+
+				sdcard_pins_cd: sdcard_cd {
+					realtek,pins = "gpio_34", "gpio_35";
+					realtek,function = "gpio";
+					realtek,pull_en = <1>;
+					realtek,pull_sel = <1>;
+				};
+
+				sdcard_pins_gpio: sdcard_gpio {
+					realtek,pins = "gpio_3", "gpio_30", "gpio_31";
+					realtek,function = "gpio";
+					realtek,pull_en = <1>;
+					realtek,pull_sel = <1>;
+				};
+
+				scpu_ejtag_pins_disable: scpu_ejtag_pins_disable {
+					realtek,pins = "ejtag_scpu_loc";
+					realtek,function = "scpu_ejtag_disable";
+				};
+			};
+
+			mux_intc: intc@1b000 {
+				compatible = "Realtek,rtk-irq-mux";
+				Realtek,mux-nr = <2>;
+				#interrupt-cells = <2>;
+				interrupt-controller;
+				reg = <0x1b000 0x100>, /* MISC_TOP MISC_ISO */
+					<0x7000 0x100>;
+				interrupts = <0 40 4>, <0 41 4>;
+				intr-status = <0xc>, <0x0>;
+				intr-en = <0x80>, <0x40>;
+				status = "okay";
+			};
+
+			misc: syscon@1b000 {
+				compatible = "syscon", "simple-mfd";
+				reg = <0x1b000 0x1000>;
+				reg-io-width = <4>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0x0 0x1b000 0x1000>;
+
+				watchdog: watchdog@5b0 {
+					compatible = "realtek,rtd1295-watchdog";
+					reg = <0x5b0 0x20>;
+					clocks = <&osc27M>;
+					timeout-sec = <10>;
+					status = "okay";
+				};
+
+				rtc: rtc@600 {
+					compatible = "realtek,rtd1295-rtc";
+					reg = <0x600 0x34>;
+					clocks = <&osc27M>;
+					status = "okay";
+				};
+			};
+
+			scpu_wrapper: syscon@1d000 {
+				compatible = "syscon", "simple-mfd";
+				reg = <0x1d000 0x1000>;
+				reg-io-width = <4>;
+				#address-cells = <1>;
+				#size-cells = <1>;
+				ranges = <0x0 0x1d000 0x1000>;
+			};
+
+			pwm: pwm@70d0 {
+				compatible = "realtek,rtd1295-pwm";
+				#pwm-cells = <2>;
+				reg = <0x70d0 0xc>;
+				pinctrl-names = "default";
+				/* pinctrl-0 = <&pwm1_1_pins>; */
+				pwm_0 {
+					enable = <0>;
+					clkout_div = <0xff>; //default OCD: from 0x0 to 0xff
+					clksrc_div = <0x1>; //default OSD: from 0x0 to 0xf
+					duty_rate = <5>; //default duty_rate 0 ~ 100
+				};
+				pwm_1 {
+					enable = <1>;
+					clkout_div = <0xff>; //default OCD: from 0x0 to 0xff
+					clksrc_div = <0x1>; //default OSD: from 0x0 to 0xf
+					duty_rate = <50>; //default duty_rate 0 ~ 100
+				};
+				pwm_2 {
+					enable = <0>;
+					clkout_div = <0xff>; //default OCD: from 0x0 to 0xff
+					clksrc_div = <0x1>; //default OSD: from 0x0 to 0xf
+					duty_rate = <50>; //default duty_rate 0 ~ 100
+				};
+				pwm_3 {
+					enable = <0>;
+					clkout_div = <0xff>; //default OCD: from 0x0 to 0xff
+					clksrc_div = <0x1>; //default OSD: from 0x0 to 0xf
+					duty_rate = <50>; //default duty_rate 0 ~ 100
+				};
+			};
+		};
+
+		emmc: mmc@98012000 {
+			compatible = "Realtek,rtk1295-emmc";
+			reg = <0x98012000 0xa00>, /* EMMC */
+			      <0x98000000 0x600>, /* CRT */
+			      <0x9801A000 0x80>, /* SB2 */
+			      <0x9801B000 0x150>, /* MISC */
+			      <0x9801a954 0x20>,  /* SB2_DBG */
+			      <0x9804f000 0x100>; /* ISO */
+			interrupts = <GIC_SPI 42 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&osc27M>, <&osc27M>;
+			clock-names = "emmc", "emmc_ip";
+			fifo-depth = <256>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+			status = "disabled";
+		};
+
+		sdmmc: mmc@98010400 {
+			compatible = "Realtek,rtk1619-sdmmc";
+			reg = <0x98000000 0x400>, /* CRT (0) */
+			      <0x98010400 0x200>, /* SDMMC (1) */
+			      <0x9801A000 0x400>, /* BS2 (2) */
+			      <0x9804f000 0x40>,  /* ISO (3) */
+			      <0x98010A00 0x40>,  /* SDIO (4) */
+			      <0x98007000 0x200>; /* ISOPAD/GPIODIR (5) */
+			interrupts = <GIC_SPI 44 IRQ_TYPE_LEVEL_HIGH>;
+			clocks = <&osc27M>, <&osc27M>;
+			clock-names = "clk_en_cr", "clk_en_sd_ip";
+			gpios = <&rtk_iso_gpio 30 GPIO_ACTIVE_LOW>; /* SD power, active low */
+			cd-gpios = <&rtk_iso_gpio 35 GPIO_ACTIVE_HIGH>; /* Card Detect, active high (driver needs raw) */
+			broken-cd;
+			wp-gpios = <&rtk_iso_gpio 34 GPIO_ACTIVE_HIGH>; /* Write Protect, active high (driver needs raw) */
+			pinctrl-names = "default";
+			pinctrl-0 = <&sdcard_pins_data &sdcard_pins_cd &sdcard_pins_gpio &scpu_ejtag_pins_disable>;
+			status = "disabled";
+		};
+
+		gic: interrupt-controller@ff100000 {
+			compatible = "arm,gic-v3";
+			reg = <0xff100000 0x10000>,
+			      <0xff140000 0xc0000>;
+			interrupts = <GIC_PPI 9 IRQ_TYPE_LEVEL_HIGH>;
+			interrupt-controller;
+			#interrupt-cells = <3>;
+		};
+	};
+};
+
+&iso {
+	uart0: serial@800 {
+		compatible = "snps,dw-apb-uart";
+		reg = <0x800 0x400>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		interrupts = <GIC_SPI 68 IRQ_TYPE_LEVEL_HIGH>;
+		clock-frequency = <27000000>;
+		status = "disabled";
+	};
+};
+
+&misc {
+	uart1: serial@200 {
+		compatible = "snps,dw-apb-uart";
+		reg = <0x200 0x400>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		interrupts = <GIC_SPI 89 IRQ_TYPE_LEVEL_HIGH>;
+		clock-frequency = <432000000>;
+		status = "disabled";
+	};
+
+	uart2: serial@400 {
+		compatible = "snps,dw-apb-uart";
+		reg = <0x400 0x400>;
+		reg-shift = <2>;
+		reg-io-width = <4>;
+		interrupts = <GIC_SPI 90 IRQ_TYPE_LEVEL_HIGH>;
+		clock-frequency = <432000000>;
+		status = "disabled";
+	};
+};
+
+/ {
+	thermal_sensor: thermal-sensor@9801db00 {
+		compatible = "realtek,rtd16xx-thermal-sensor";
+		reg = <0x9801db00 0x50>;
+		#thermal-sensor-cells = <0x00>;
+		status = "okay";
+	};
+
+	thermal-zones {
+		cpu-thermal {
+			polling-delay-passive = <250>;
+			polling-delay = <1000>;
+			thermal-sensors = <&thermal_sensor>;
+			
+			trips {
+				cpu_crit: cpu-crit {
+					temperature = <130000>;
+					hysteresis = <0>;
+					type = "critical";
+				};
+				cpu_alert0: cpu-alert0 {
+					temperature = <90000>;
+					hysteresis = <0>;
+					type = "passive";
+				};
+				cpu_alert1: cpu-alert1 {
+					temperature = <100000>;
+					hysteresis = <0>;
+					type = "passive";
+				};
+			};
+		};
+	};
+};
