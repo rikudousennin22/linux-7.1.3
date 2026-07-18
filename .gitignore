@@ -19,3 +19,46 @@ vmlinux*
 System.map
 .config
 .version
+
+# Build artifacts
+*.o
+*.o.cmd
+*.ko
+*.ko.cmd
+*.mod.cmd
+*.a
+*.a.cmd
+*.so
+*.so.cmd
+
+# Build temp files
+.tmp_*
+.*.cmd
+.config.old
+.config:*
+
+# Kernel generated files
+Module.symvers
+modules.builtin
+modules.builtin.modinfo
+.modules.builtin.cmd
+.modules.builtin.modinfo.cmd
+.vmlinux.*
+vmlinux*
+System.map
+
+# IDE dan editor
+.git/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+.clang-format
+.editorconfig
+.pylintrc
+.rustfmt.toml
+.mailmap
+
+# Build directories
+Build/
