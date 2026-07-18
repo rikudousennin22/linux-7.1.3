@@ -7,3 +7,15 @@ Build/
 *.swo
 *~
 .DS_Store
+
+# Kernel build artifacts
+*.o.cmd
+*.a.cmd
+*.mod.cmd
+.modules.order.cmd
+modules.order
+built-in.a
+vmlinux*
+System.map
+.config
+.version
