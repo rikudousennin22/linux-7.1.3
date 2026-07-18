@@ -1,0 +1,12 @@
+config RTK_THERMAL
+	tristate "Realtek Thermal Sensor"
+	depends on THERMAL && OF
+	help
+	  This is the driver for the Realtek thermal sensor.
+
+config RTK_THERMAL_RTD16XX
+	bool "Realtek RTD16XX Thermal Sensor"
+	depends on RTK_THERMAL
+	default y
+	help
+	  This enables the Realtek RTD16XX thermal sensor driver.

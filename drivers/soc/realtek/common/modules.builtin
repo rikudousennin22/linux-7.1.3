@@ -1,0 +1,4 @@
+kernel/drivers/soc/realtek/common/rtk_ion_of.ko
+kernel/drivers/soc/realtek/common/rtk_demod.ko
+kernel/drivers/soc/realtek/common/rtk_tp.ko
+kernel/drivers/soc/realtek/common/rtk_r2rdsc.ko

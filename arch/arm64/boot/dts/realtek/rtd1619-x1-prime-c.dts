@@ -1,0 +1,165 @@
+// SPDX-License-Identifier: (GPL-2.0-or-later OR BSD-2-Clause)
+/*
+ * @sib0ndt
+ */
+
+/dts-v1/;
+
+#include "rtd1619.dtsi"
+#include "rtd-16xx-cpu-dvfs-extreme.dtsi"
+/ {
+	compatible = "realtek,mjolnir", "realtek,rtd1619";
+	model = "X1 PRIME C";
+
+	memory@200000 {
+		device_type = "memory";
+		reg = <0x200000 0x7fe00000>; /* ~ 2GB */
+	};
+
+	reserved-memory {
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		/*
+		 * TZC-400 Secure heap regions.
+		 * BL31/OPTEE configures TZC-400 to protect these regions
+		 * at hardware level. Writes are silently dropped, reads
+		 * return 0x00. Verified exact boundaries via U-Boot mw/md:
+		 *   0x303e0000 → writable (OK)
+		 *   0x303f0000 → blocked  (TZC-400 start)
+		 *   0x45000000 → blocked 
+		 *   0x45700000 → writable (TZC-400 end)
+		 * Matches Android TV ion secure heap layout:
+		 *   Secure @ 0x303f0000 (34MB)
+		 *   Secure @ 0x32800000 (2MB)
+		 *   Secure @ 0x32b00000 (213MB)
+		 *   Secure @ 0x40000000 (87MB)  → ends at 0x456fffff
+		 */
+		secure_heaps: secure@303f0000 {
+			reg = <0x303f0000 0x15310000>; /* 325MB: 0x303f0000-0x456fffff */
+			no-map;
+		};
+	};
+
+	chosen {
+		stdout-path = "serial0:115200n8";
+	};
+
+	aliases {
+		serial0 = &uart0;
+		serial1 = &uart1;
+		serial2 = &uart2;
+		ethernet0 = &nic;
+	};
+
+	/* --- Power Regulator Tree --- */
+	main_12v: regulator-main_12v {
+		compatible = "regulator-fixed";
+		regulator-name = "12V";
+		regulator-min-microvolt = <12000000>;
+		regulator-max-microvolt = <12000000>;
+		regulator-always-on;
+	};
+
+	vcc_5v: regulator-vcc_5v {
+		compatible = "regulator-fixed";
+		regulator-name = "VCC_5V";
+		regulator-min-microvolt = <5000000>;
+		regulator-max-microvolt = <5000000>;
+		regulator-always-on;
+	};
+
+	vdd_cpu: regulator-vdd-cpu {
+		compatible = "regulator-fixed";
+		regulator-name = "VDD_CPU";
+		regulator-min-microvolt = <900000>;
+		regulator-max-microvolt = <900000>;
+		regulator-always-on;
+	};
+};
+
+/* Biarkan reg_usb_vbus mandiri agar tidak terjadi deferred probe */
+&reg_usb_vbus {
+	regulator-always-on;
+};
+
+/* --- Menerapkan Regulator ke CPU --- */
+/* debug console (J1) */
+&uart0 {
+	status = "okay";
+};
+
+/* M.2 slot (CON4) */
+&uart1 {
+	status = "disabled";
+};
+
+&uart2 {
+	status = "disabled";
+};
+
+&usb0 {
+	status = "okay";
+};
+
+&usb0_dwc3 {
+	dr_mode = "host";
+	maximum-speed = "super-speed";
+	vbus-supply = <&reg_usb_vbus>;
+	/* Mematikan fitur suspend PHY yang sering membuat USB 3.0 error/disconnect */
+	snps,dis_u2_susphy_quirk;
+	snps,dis_u3_susphy_quirk;
+	
+	/* Mematikan status low-power (U1/U2) pada SuperSpeed */
+	snps,dis-enblslpm-quirk;
+	snps,dis-u1-entry-quirk;
+	snps,dis-u2-entry-quirk;
+};
+
+&usb1 {
+	status = "okay";
+	usb@98029000 {
+		vbus-supply = <&reg_usb_vbus>;
+	};
+};
+
+&usb2 {
+	status = "okay";
+	usb@98050000 {
+		vbus-supply = <&reg_usb_vbus>;
+	};
+};
+
+&pwm {
+	status = "disabled";
+};
+
+&emmc {
+	status = "okay";
+	bus-width = <8>;
+	non-removable;
+	disable-wp;
+	cap-mmc-highspeed;
+
+	slot@0 {
+		reg = <0>;
+		bus-width = <8>;
+	};
+};
+
+&sdio {
+	status = "okay";
+	gpios = <&rtk_iso_gpio 27 0>; /* WL_EN Power pin */
+	pinctrl-names = "default";
+	pinctrl-0 = <&sdio_pins_1>;
+	bus-width = <4>;
+	cap-sd-highspeed;
+	sd-uhs-sdr50;
+	sd-uhs-sdr104;
+	max-frequency = <208000000>;
+	cap-sdio-irq;
+	keep-power-in-suspend;
+	non-removable;
+};
+
